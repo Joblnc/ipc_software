@@ -18,16 +18,16 @@
 // === CONFIGURATION ===
 
 // WiFi identifiers
-const char ssid[] = "VOTRE_WIFI_SSID";     // to change
-const char pass[] = "VOTRE_WIFI_PASSWORD"; // to change
+const char ssid[] = "AtelierLyon";     // to change
+const char pass[] = "AlexandreEstLePlusGrosBgDeCettePlanete!!"; // to change
 
 // IP Adresses
 // data collecter computer ip (maybe have to change it)
-const IPAddress PC_DATA_IP(192, 168, 1, 50); 
+const IPAddress PC_DATA_IP(10, 10, 1, 8); 
 const uint16_t PC_DATA_PORT_UDP = 12345;
 
-*// server ip (maybe have to change it)
-const IPAddress PC_CONTROL_IP(192, 168, 1, 50);
+// server ip (maybe have to change it)
+const IPAddress PC_CONTROL_IP(10, 10, 1, 8);
 const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins
@@ -56,7 +56,7 @@ WiFiUDP udp;
 WiFiClient tcpClient;
 int wifiStatus = WL_IDLE_STATUS;
 
-$// Measurement parameters (editable by the TCP server) 
+// Measurement parameters (editable by the TCP server) 
 uint16_t delay_between_freqs_us = 1000; // time to wait between each signal that we send (in micro seconds)
 uint16_t frequency_count = 300;         // number of frequency analysed
 bool isScanning = false;                // System state (on / off)
