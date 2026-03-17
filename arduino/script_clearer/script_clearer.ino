@@ -27,9 +27,9 @@ const IPAddress PC_CONTROL_IP(10, 10, 1, 8);
 const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins
-const uint8_t PIN_ADC_INPUT = A0;   
-const uint8_t PIN_PWM_OUTPUT = 6;  // Remplacé par D6 (GPIO 6 natif sur RP2040)
-const uint8_t LED_Witness = 12;     
+const uint8_t PIN_ADC_INPUT = A0;   // Reads the plant answer
+const uint8_t PIN_PWM_OUTPUT = 6;   // Sends the signal
+const uint8_t LED_Witness = 12;     // LED that turns on during measuring
 
 // === DATA STRUCTURES ===
 
@@ -146,13 +146,10 @@ void setup() {
   // WiFi Connection
   connectToWiFi();
 
-  // PWM pin configuration (18, or A2)
-  gpio_set_function(PIN_PWM_OUTPUT, GPIO_FUNC_PWM);
-
   // small break to let time to open serial tracer
   delay(3000); 
 
-  // PWM pin configuration (18, or A2)
+  // PWM pin configuration (D6)
   gpio_set_function(PIN_PWM_OUTPUT, GPIO_FUNC_PWM);
 
   // ADC configuration : 12 bits resolution => values from 0 to 4095
