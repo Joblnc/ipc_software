@@ -1,9 +1,6 @@
 /*
- * INTERNET OF PLANTS PROJECT
+ * INTERNET OF PLANTS PROJECT - MODE DIFFÉRENTIEL (LOUPE)
  * HardWare: Arduino Nano RP2040 Connect
- * Description: This script sends different sequences to the plant (PWM) and 
- *  measures the plant answer with ADC. Data is then sent to the TCP server with UDP
- *  The system is driven by a TCP Server, in Python
  */
 
 #include <SPI.h>
@@ -16,7 +13,6 @@
 #include "clocks.h" 
 
 // === CONFIGURATION ===
-
 // WiFi identifiers
 const char ssid[] = "AtelierLyon";     // to change
 const char pass[] = "AlexandreEstLePlusGrosBgDeCettePlanete!!"; // to change
@@ -32,8 +28,8 @@ const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins
 const uint8_t PIN_ADC_INPUT = A0;   // Reads the plant answer
-const uint8_t PIN_PWM_OUTPUT = 18;  // Sends the signal (18 = A2 on the card)
-const uint8_t LED_Witness = 12;      // LED that turns on during measuring
+const uint8_t PIN_PWM_OUTPUT = 6;   // Sends the signal
+const uint8_t LED_Witness = 12;     // LED that turns on during measuring
 
 // === DATA STRUCTURES ===
 
@@ -48,8 +44,9 @@ typedef struct {
 
 // Arrays to stock sent frequencies and answers gotten
 #define MAX_FREQUENCIES 700
-pwm_config_t frequency_list[MAX_FREQUENCIES] = {}; // List of the frequencies to send (the server imposes it)
-static uint16_t measurement_buffer[MAX_FREQUENCIES]; // List of the answers of the plant for each frequency sent
+pwm_config_t frequency_list[MAX_FREQUENCIES] = {};
+static uint16_t measurement_buffer[MAX_FREQUENCIES];
+static uint16_t baseline_buffer[MAX_FREQUENCIES]; // Reference memory
 
 // Global Variables
 WiFiUDP udp;
@@ -57,9 +54,10 @@ WiFiClient tcpClient;
 int wifiStatus = WL_IDLE_STATUS;
 
 // Measurement parameters (editable by the TCP server) 
-uint16_t delay_between_freqs_us = 1000; // time to wait between each signal that we send (in micro seconds)
-uint16_t frequency_count = 300;         // number of frequency analysed
-bool isScanning = false;                // System state (on / off)
+uint16_t delay_between_freqs_us = 1000;  // time to wait between each signal that we send (in micro seconds)
+uint16_t frequency_count = 0;            // number of frequency analysed
+bool isScanning = false;                 // System state (on / off)
+uint pwm_slice;                         
 
 // States of the arduino
 enum State {
@@ -67,6 +65,9 @@ enum State {
   RECEIVING_FREQUENCY_LIST
 };
 State currentState = WAITING_FOR_COMMAND;
+
+// Debug variable, for visual result on the serial plotter
+bool debug = 0;
 
 // === UTILS FUNCTIONS ===
 
@@ -101,42 +102,41 @@ void configurePWM(uint slice, uint16_t top, uint8_t div_int, uint8_t div_frac) {
   pwm_set_counter(slice, 0);
   pwm_set_clkdiv_int_frac(slice, div_int, div_frac);
   pwm_set_wrap(slice, top);
-  pwm_set_chan_level(slice, PWM_CHAN_A, (top + 1) / 2);
+  pwm_set_chan_level(slice, PWM_CHAN_A, (top + 1) / 2); 
 }
 
 // principal function : sends the different frequences to the plant and read the answers
-void performFrequencySweep(uint slice) {
-  pwm_set_enabled(slice, true); // activates the pwm generator
-  digitalWrite(LED_Witness, HIGH); // turns on the witness led
+void performFrequencySweep(uint slice, uint16_t* buffer_to_fill) {
+  pwm_set_enabled(slice, true);     // activates the pwm generator
+  digitalWrite(LED_Witness, HIGH);  // turns on the witness led
 
   // iterates over the frequency list
   for (size_t i = 0; i < frequency_count; i++) {
     // configures the current frequency
     auto &cfg = frequency_list[i];
     configurePWM(slice, cfg.top, cfg.div_int, cfg.div_frac);
-    
+
     // waits for the signal to stabilize
     delayMicroseconds(delay_between_freqs_us);
     
-    // reads the plant answer
-    measurement_buffer[i] = analogRead(PIN_ADC_INPUT);
+    // fills the array with answers of the plant
+    buffer_to_fill[i] = analogRead(PIN_ADC_INPUT);
   }
 
-  digitalWrite(LED_Witness, LOW); // Turns off the led
-  // Note: to keep continuity, we don't turn off the pwm, but we could add 
-  // pwm_set_enabled(slice, false);
+  digitalWrite(LED_Witness, LOW);  // Turns off the led
+  pwm_set_enabled(slice, false); 
 }
 
-// === SETUP AND LOOP ===
+// === SETUP ===
 
 void setup() {
-  // Pins Initialization
+  // Pins initialization
   pinMode(LED_Witness, OUTPUT);
   pinMode(LEDR, OUTPUT);
   pinMode(LEDG, OUTPUT);
   pinMode(LEDB, OUTPUT);
-  
-  Serial.begin(9600);
+
+  Serial.begin(115200); 
   
   // Cheks the FirmWare WiFi
   if (WiFi.firmwareVersion() < WIFI_FIRMWARE_LATEST_VERSION) {
@@ -146,21 +146,38 @@ void setup() {
   // WiFi Connection
   connectToWiFi();
 
-  // PWM pin configuration (18, or A2)
+  // small break to let time to open serial tracer
+  delay(3000); 
+
+  // PWM pin configuration (D6)
   gpio_set_function(PIN_PWM_OUTPUT, GPIO_FUNC_PWM);
-  
+
   // ADC configuration : 12 bits resolution => values from 0 to 4095
-  analogReadResolution(12);
+  analogReadResolution(12); 
 
   // UDP Start
   udp.begin(PC_DATA_PORT_UDP);
+
+  pwm_slice = pwm_gpio_to_slice_num(PIN_PWM_OUTPUT);
+
+  if (debug == 1){
+    // generates specific frequences
+    for (uint32_t freq = 20000; freq <= 250000; freq += 10000) {
+      frequency_list[frequency_count].top = (125000000 / freq) - 1;
+      frequency_list[frequency_count].div_int = 1;
+      frequency_list[frequency_count].div_frac = 0;
+      frequency_count++;
+    }
+    
+    // Reference line calibration : first sweep on nothing 
+    performFrequencySweep(pwm_slice, baseline_buffer);
+  }
 }
 
-// gets the controlling slice of the 18 (aka A2) port
-uint pwm_slice = pwm_gpio_to_slice_num(PIN_PWM_OUTPUT);
+// === LOOP ===
 
 void loop() {
-  
+
   // Reconnects automatically to wifi if it lost connection
   if (WiFi.status() != WL_CONNECTED) {
     connectToWiFi();
@@ -206,7 +223,7 @@ void loop() {
       }
     }
     
-    else if (currentState == RECEIVING_FREQUENCY_LIST) {
+    else if (currentState == RECEIVING_FREQUENCY_LIST && debug == 0) {
       // Reads the number of frequencies we'll get, on 2 bytes
       if (tcpClient.available() >= 2) {
          tcpClient.readBytes((char*)&frequency_count, 2);
@@ -227,13 +244,33 @@ void loop() {
     }
   }
 
-  // if it is scanning, sweeps
-  if (isScanning) {
-    performFrequencySweep(pwm_slice);
+  if (debug == 1 || isScanning){
+    // stores new measures in measurment buffer
+    performFrequencySweep(pwm_slice, measurement_buffer);
+    
+    // displays difference between measurements and references
+    for (size_t i = 0; i < frequency_count; i++) {
+      // difference calculation
+      int difference = (int)measurement_buffer[i] - (int)baseline_buffer[i];
+
+      // set y axis around 0 to make a zoom effect
+      Serial.print("Min:-150, ");
+      Serial.print("Max:150, ");
+      Serial.print("Zero_Ref:0, "); // Draws a line on 0 as reference
+      
+      Serial.print("Variation:");
+      Serial.println(difference);
+      
+      delay(20); 
+    }
 
     // send the results (i.e. the answers of the plant to each frequency)
     udp.beginPacket(PC_DATA_IP, PC_DATA_PORT_UDP);
     udp.write((uint8_t*)measurement_buffer, frequency_count * sizeof(uint16_t));
     udp.endPacket();
   }
+  
+
+  // Pause de 2 secondes
+  delay(2000); 
 }
