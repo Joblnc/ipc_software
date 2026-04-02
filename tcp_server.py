@@ -1,6 +1,7 @@
 import socket
 import struct
 import sys
+import matplotlib.pyplot as plt
 
 def get_local_ip():
     # creates false socket to get our ip
@@ -19,22 +20,26 @@ def get_local_ip():
 def frequencies_list():
     # list containing different frequencies
     freq_list = []
+    x_axis_freqs = []
     # frequency of the RP2040
     max_freq = 125000000
     # iteration from 20kHz to 250kHz
-    for i in range(20, 251):
+    for i in range(20, 251, 10):
+        target_freq = i * 1000
+        x_axis_freqs.append(target_freq)
+
         # gets the top, considering that div_int = 1 and div_frac = 0
         top = max_freq // (i * 1000) - 1
         # appends top, div_int and div_frac encoded to be understabndable by the RP2040
         freq_list.append(struct.pack('<HBB', top, 1, 0))
     # gets the list as one long byte sequence, optimization
     payload = b"".join(freq_list)
-    return payload, len(freq_list)
+    return payload, len(freq_list), x_axis_freqs
 
 def send_instructions(s : socket.socket):
     print("sending data to Arduino")
 
-    payload, count = frequencies_list()
+    payload, count, x_axis = frequencies_list()
     # says to arduino that it will receive the list of frequencies
     s.send(struct.pack('<B', 3))
 
@@ -46,14 +51,32 @@ def send_instructions(s : socket.socket):
     s.send(payload)
     # says to Arduino that it can start to sweep
     s.send(struct.pack('<B', 1))
-    return
+    return x_axis
 
-def receive_answers(host : str):
+def receive_answers(host : str, x_axis: list):
     # configures a socket for UDP protocol
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Arduino sends data on port 12345, so we get data on this port
     UDP_PORT = 12345
     udp_socket.bind((host, UDP_PORT))
+
+    plt.ion() # Active le mode interactif
+    fig, ax = plt.subplots(figsize=(10, 6)) # Crée la fenêtre
+    
+    # <<<<<<<<<<<<<<<<<<<<
+    # On trace une première ligne vide (avec des zéros)
+    line, = ax.plot(x_axis, [0] * len(x_axis), '-o', color='teal', linewidth=2, markersize=4)
+    
+    # Configuration esthétique du graphique
+    ax.set_ylim(0, 4095) # L'ADC de l'Arduino va de 0 à 4095
+    ax.set_xlim(min(x_axis), max(x_axis))
+    ax.set_title("Signature de la plante en temps réel (Mode Différentiel)", fontsize=14)
+    ax.set_xlabel("Fréquence (Hz)", fontsize=12)
+    ax.set_ylabel("Valeur ADC brute", fontsize=12)
+    ax.grid(True, linestyle='--', alpha=0.7)
+    plt.show()
+
+    # >>>>>>>>>>>>>>>>>>>>
 
     try:
         while True:
@@ -67,19 +90,21 @@ def receive_answers(host : str):
             unpack_format = f"<{nb_answers}H"
             data = struct.unpack(unpack_format, data_bytes)
 
-            for e in data:
-                print(e)
-            print(f"number of data answers got :{len(data)}")
+            print(f"Reçu {len(data)} points | Valeur Max de ce balayage : {max(data)}")
+            
+            if len(data) == len(x_axis): # Sécurité : s'assure qu'on a le bon nombre de points
+                line.set_ydata(data)     # Remplace les anciennes valeurs Y par les nouvelles
+                fig.canvas.draw()        # Redessine
+                fig.canvas.flush_events() # Force l'interface graphique à s'actualiser
 
-            udp_socket.close()
-
-            return
             # TODO : save the data
             
     except KeyboardInterrupt:
         print("Stops reception.")
     finally:
         udp_socket.close()
+        plt.ioff()
+        plt.close() 
 
 def main():
     # indicates the ip to use, and the port where to send data
@@ -108,9 +133,9 @@ def main():
 
         try:
             # send the list of frequencies to arduino
-            send_instructions(arduino_socket)
+            x_axis = send_instructions(arduino_socket)
             # gets the corresponding answers
-            receive_answers(host)
+            receive_answers(host, x_axis)
             # maybe have to remove the return: it's just here to stop the program after getting the answers
             #return
         except ConnectionResetError:
