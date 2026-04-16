@@ -14,16 +14,16 @@
 
 // === CONFIGURATION ===
 // WiFi identifiers
-const char ssid[] = "Wifi_Atelier";     // to change
-const char pass[] = "MakerSpace69"; // to change
+const char ssid[] = "MyAccessPoint";     // to change
+const char pass[] = "12345678"; // to change
 
 // IP Adresses
 // data collecter computer ip (maybe have to change it)
-const IPAddress PC_DATA_IP(192, 168, 1, 102); 
+const IPAddress PC_DATA_IP(192, 168, 12, 70); 
 const uint16_t PC_DATA_PORT_UDP = 12345;
 
 // server ip (maybe have to change it)
-const IPAddress PC_CONTROL_IP(192, 168, 1, 102);
+const IPAddress PC_CONTROL_IP(192, 168, 12, 70);
 const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins

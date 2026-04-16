@@ -1,7 +1,11 @@
 import socket
 import struct
 import sys
+import threading
+import queue
+import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 def get_local_ip():
     # creates false socket to get our ip
@@ -24,7 +28,8 @@ def frequencies_list():
     # frequency of the RP2040
     max_freq = 125000000
     # iteration from 20kHz to 250kHz
-    for i in range(20, 251, 10):
+    # TODO : change the step
+    for i in range(20, 251, 1):
         target_freq = i * 1000
         x_axis_freqs.append(target_freq)
 
@@ -53,61 +58,111 @@ def send_instructions(s : socket.socket):
     s.send(struct.pack('<B', 1))
     return x_axis
 
-def receive_answers(host : str, x_axis: list):
-    # configures a socket for UDP protocol
+# Queue to transfer network data to graphical interface
+data_queue = queue.Queue(maxsize=5)
+
+# Function that runs backwards, to collect udp data without blocking display of data
+def udp_listener_thread(host, port, expected_length):
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # Arduino sends data on port 12345, so we get data on this port
-    UDP_PORT = 12345
-    udp_socket.bind((host, UDP_PORT))
-
-    plt.ion() # Active le mode interactif
-    fig, ax = plt.subplots(figsize=(10, 6)) # Crée la fenêtre
+    udp_socket.bind((host, port))
+    print(f"UDP listening started on {host}:{port}...")
     
-    # <<<<<<<<<<<<<<<<<<<<
-    # On trace une première ligne vide (avec des zéros)
-    line, = ax.plot(x_axis, [0] * len(x_axis), '-o', color='teal', linewidth=2, markersize=4)
-    
-    # Configuration esthétique du graphique
-    ax.set_ylim(0, 4095) # L'ADC de l'Arduino va de 0 à 4095
-    ax.set_xlim(min(x_axis), max(x_axis))
-    ax.set_title("Signature de la plante en temps réel (Mode Différentiel)", fontsize=14)
-    ax.set_xlabel("Fréquence (Hz)", fontsize=12)
-    ax.set_ylabel("Valeur ADC brute", fontsize=12)
-    ax.grid(True, linestyle='--', alpha=0.7)
-    plt.show()
-
-    # >>>>>>>>>>>>>>>>>>>>
-
     try:
         while True:
-            # recvfrom stops the script, waiting for somthing from arduino
             # 2048 is the max number of bytes to read
-            data_bytes, arduino_address = udp_socket.recvfrom(2048)
-            
-            # data_bytes stores answers on 2 bytes, so tha actual nb of bytes is len // 2
+            data_bytes, _ = udp_socket.recvfrom(2048)
+            # data_bytes stores answers on 2 bytes, so actual nb of bytes is len // 2
             nb_answers = len(data_bytes) // 2
-            # fromat used for unpacking
-            unpack_format = f"<{nb_answers}H"
-            data = struct.unpack(unpack_format, data_bytes)
-
-            print(f"Reçu {len(data)} points | Valeur Max de ce balayage : {max(data)}")
             
-            if len(data) == len(x_axis): # Sécurité : s'assure qu'on a le bon nombre de points
-                line.set_ydata(data)     # Remplace les anciennes valeurs Y par les nouvelles
-                fig.canvas.draw()        # Redessine
-                fig.canvas.flush_events() # Force l'interface graphique à s'actualiser
-
-            # TODO : save the data
-            
-    except KeyboardInterrupt:
-        print("Stops reception.")
+            if nb_answers == expected_length:
+                # Unpacks data with the correct format
+                data = struct.unpack(f"<{nb_answers}H", data_bytes)
+                
+                # Only keeps most recent data for display
+                if data_queue.full():
+                    try:
+                        data_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                data_queue.put(data)
+                
+                # TODO: Save data in a csv file or whatever
+                
+    except Exception as e:
+        print(f"Error UDP : {e}")
     finally:
         udp_socket.close()
-        plt.ioff()
-        plt.close() 
+
+
+# Function to collect data from Arduino in UDP and to display it
+def receive_answers_animated(host: str, x_axis: list):
+    UDP_PORT = 12345
+    
+    # Starts network listening in a separate thread
+    listener = threading.Thread(target=udp_listener_thread, args=(host, UDP_PORT, len(x_axis)), daemon=True)
+    listener.start()
+
+    # Configuration of Matplotlib
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.canvas.manager.set_window_title("Internet of Plants - Biosignal")
+    
+    # Style and colors
+    ax.set_facecolor('#f8f9fa') # Very bright gray
+    fig.patch.set_facecolor('#ffffff') # White
+    
+    # Creation of the reference green line
+    line, = ax.plot(x_axis, np.zeros(len(x_axis)), '-', color='#2ca02c', linewidth=2, alpha=0.9)
+    
+    # Titles and labels
+    ax.set_title("Signature d'impédance de la plante", fontsize=14, fontweight='bold', pad=15)
+    ax.set_xlabel("Fréquence (Hz)", fontsize=12)
+    ax.set_ylabel("Amplitude brute (ADC)", fontsize=12)
+    
+    # Grid
+    ax.grid(True, linestyle=':', alpha=0.7, color='#6c757d')
+    ax.set_xlim(min(x_axis), max(x_axis))
+
+    # Update function (called automatically with Matplotlib)
+    def update_graph(frame):
+        try:
+            # Gets previous data
+            data = data_queue.get_nowait()
+            line.set_ydata(data)
+
+            # Adjusting Y axis, to avoid flat effect when the plant is not touched
+            min_y = min(data)
+            max_y = max(data)
+            margin = (max_y - min_y) * 0.1 
+            
+            # In case there's no signal, puts a small margin
+            if margin == 0: 
+                margin = 100 
+                
+            # Focus on current data
+            ax.set_ylim(max(0, min_y - margin), min(4095, max_y + margin))
+            
+            # Fills area under the curve
+            if hasattr(update_graph, 'fill_poly'):
+                update_graph.fill_poly.remove()
+            update_graph.fill_poly = ax.fill_between(x_axis, data, min(0, min_y - margin), color='#2ca02c', alpha=0.15)
+
+            return line,
+        
+        except queue.Empty:
+            # If no new data, does nothing
+            return line,
+
+    # Intializes the filling variable
+    update_graph.fill_poly = ax.fill_between(x_axis, np.zeros(len(x_axis)), 0, color='#2ca02c', alpha=0.1)
+
+    # Starts the animation
+    ani = animation.FuncAnimation(fig, update_graph, interval=50, blit=False, cache_frame_data=False)
+    
+    plt.tight_layout()
+    plt.show()
+
 
 def main():
-    # indicates the ip to use, and the port where to send data
     host = get_local_ip()
     port = 20000
 
@@ -126,22 +181,21 @@ def main():
     tcp_socket.listen(1)
     print("Server waiting for a request ...")
 
-    while(True):
-        # gets the socket and address of the arduino that connects to the TCP socket
+    while True:
         arduino_socket, arduino_address = tcp_socket.accept()
-        print(f"Arduino connected from {arduino_address}")
+        print(f"Arduino connecté depuis {arduino_address}")
 
         try:
             # send the list of frequencies to arduino
             x_axis = send_instructions(arduino_socket)
             # gets the corresponding answers
-            receive_answers(host, x_axis)
-            # maybe have to remove the return: it's just here to stop the program after getting the answers
-            #return
+            receive_answers_animated(host, x_axis)
+            
         except ConnectionResetError:
             print("Arduino disconnected")
         finally:
             arduino_socket.close()
-            print("waiting for new connexion")
+            print("waiting for new connexion...")
 
-main()
+if __name__ == "__main__":
+    main()
