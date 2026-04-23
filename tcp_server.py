@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+from data_collection import write_data
+
 def get_local_ip():
     # creates false socket to get our ip
     temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -27,16 +29,23 @@ def frequencies_list():
     x_axis_freqs = []
     # frequency of the RP2040
     max_freq = 125000000
-    # iteration from 20kHz to 250kHz
-    # TODO : change the step
-    for i in range(20, 251, 1):
+    # iteration from 15kHz to 40kHz
+    for i in range(15, 41, 1):
         target_freq = i * 1000
         x_axis_freqs.append(target_freq)
-
         # gets the top, considering that div_int = 1 and div_frac = 0
         top = max_freq // (i * 1000) - 1
         # appends top, div_int and div_frac encoded to be understabndable by the RP2040
         freq_list.append(struct.pack('<HBB', top, 1, 0))
+    # iteration from 180kHz to 230kHz
+    for i in range(180, 231, 1):
+        target_freq = i * 1000
+        x_axis_freqs.append(target_freq)
+        # gets the top, considering that div_int = 1 and div_frac = 0
+        top = max_freq // (i * 1000) - 1
+        # appends top, div_int and div_frac encoded to be understabndable by the RP2040
+        freq_list.append(struct.pack('<HBB', top, 1, 0))
+
     # gets the list as one long byte sequence, optimization
     payload = b"".join(freq_list)
     return payload, len(freq_list), x_axis_freqs
@@ -85,8 +94,8 @@ def udp_listener_thread(host, port, expected_length):
                     except queue.Empty:
                         pass
                 data_queue.put(data)
-                
-                # TODO: Save data in a csv file or whatever
+                # Writes the data in a csv file for the moment
+                write_data(data)
                 
     except Exception as e:
         print(f"Error UDP : {e}")
