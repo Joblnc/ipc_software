@@ -14,16 +14,16 @@
 
 // === CONFIGURATION ===
 // WiFi identifiers
-const char ssid[] = "AtelierLyon";     // to change
-const char pass[] = "AlexandreEstLePlusGrosBgDeCettePlanete!!"; // to change
+const char ssid[] = "MyAccessPoint";     // to change
+const char pass[] = "12345678"; // to change
 
 // IP Adresses
 // data collecter computer ip (maybe have to change it)
-const IPAddress PC_DATA_IP(10, 10, 1, 8); 
+const IPAddress PC_DATA_IP(192, 168, 12, 70); 
 const uint16_t PC_DATA_PORT_UDP = 12345;
 
 // server ip (maybe have to change it)
-const IPAddress PC_CONTROL_IP(10, 10, 1, 8);
+const IPAddress PC_CONTROL_IP(192, 168, 12, 70);
 const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins
@@ -46,6 +46,7 @@ typedef struct {
 #define MAX_FREQUENCIES 700
 pwm_config_t frequency_list[MAX_FREQUENCIES] = {};
 static uint16_t measurement_buffer[MAX_FREQUENCIES];
+static uint16_t measurement_buffer_prev[MAX_FREQUENCIES]; // Memory of previous sweep
 static uint16_t baseline_buffer[MAX_FREQUENCIES]; // Reference memory
 
 // Global Variables
@@ -102,7 +103,10 @@ void configurePWM(uint slice, uint16_t top, uint8_t div_int, uint8_t div_frac) {
   pwm_set_counter(slice, 0);
   pwm_set_clkdiv_int_frac(slice, div_int, div_frac);
   pwm_set_wrap(slice, top);
-  pwm_set_chan_level(slice, PWM_CHAN_A, (top + 1) / 2); 
+
+  uint chan = pwm_gpio_to_channel(PIN_PWM_OUTPUT); 
+  pwm_set_chan_level(slice, chan, (top + 1) / 2);
+  //pwm_set_chan_level(slice, PWM_CHAN_A, (top + 1) / 2); 
 }
 
 // principal function : sends the different frequences to the plant and read the answers
@@ -245,6 +249,10 @@ void loop() {
   }
 
   if (debug == 1 || isScanning){
+    // stores prev measurements in the corresponding buffer
+    for (int i = 0; i < MAX_FREQUENCIES; i++){
+      measurement_buffer_prev[i] = measurement_buffer[i];
+    }
     // stores new measures in measurment buffer
     performFrequencySweep(pwm_slice, measurement_buffer);
     
@@ -252,17 +260,34 @@ void loop() {
     for (size_t i = 0; i < frequency_count; i++) {
       // difference calculation
       int difference = (int)measurement_buffer[i] - (int)baseline_buffer[i];
-
+      int difference_prev = (int)measurement_buffer_prev[i] - (int)baseline_buffer[i];
       // set y axis around 0 to make a zoom effect
       Serial.print("Min:-150, ");
-      Serial.print("Max:150, ");
+      Serial.print("Max:1000, ");
       Serial.print("Zero_Ref:0, "); // Draws a line on 0 as reference
       
-      Serial.print("Variation:");
-      Serial.println(difference);
-      
+      Serial.print("Current_Variation:");
+      Serial.print(difference);
+      Serial.print(",");
+
+      Serial.print("Prev_Variation:");
+      Serial.print(difference_prev);
+      Serial.print(",");
+
+      Serial.print("Sweep_separator:");
+      Serial.println(-150);
+
       delay(20); 
     }
+
+    // displays the sweep separator 
+    Serial.print("Min:-150,");
+    Serial.print("Max:1000,");
+    Serial.print("Zero_Ref:0,"); 
+    // On met les courbes à 0 (ou on pourrait garder la dernière valeur)
+    // BOUM : Le séparateur saute tout en haut !
+    Serial.print("Separateur:");
+    Serial.println(1000);
 
     // send the results (i.e. the answers of the plant to each frequency)
     udp.beginPacket(PC_DATA_IP, PC_DATA_PORT_UDP);
@@ -271,6 +296,6 @@ void loop() {
   }
   
 
-  // Pause de 2 secondes
+  // 2 seconds break
   delay(2000); 
 }
