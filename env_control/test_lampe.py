@@ -1,9 +1,9 @@
 import asyncio
 from tapo import ApiClient
 
-IP_PRISE = "192.168.12.90"
+IP_SC = "192.168.12.90"
 EMAIL = "aubin.thome@atelier-lyon.com"
-MOT_DE_PASSE = "0LJglHu2*GEqDwIrH9H2i&%4d0oqd4"
+PASSWORD = "pXC#0JE07OJyiqcIlek!u5$J4YXH!m"
 
 
 async def afficher_statut(device):
@@ -12,12 +12,12 @@ async def afficher_statut(device):
     print(f"📊 Statut actuel: {etat}")
 
 async def main():
-    print(f"⏳ Tentative de connexion à la prise {IP_PRISE}...")
+    print(f"⏳ Tentative de connexion à la prise {IP_SC}...")
 
     try:
-        client = ApiClient(EMAIL, MOT_DE_PASSE)
+        client = ApiClient(EMAIL, PASSWORD)
 
-        device = await client.p110(IP_PRISE)
+        device = await client.p110(IP_SC)
         print("✅ Authentification réussie !")
         await afficher_statut(device)
 

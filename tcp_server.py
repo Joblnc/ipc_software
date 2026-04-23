@@ -6,7 +6,7 @@ import queue
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
+import asyncio
 from data_collection import write_data
 
 def get_local_ip():
@@ -95,7 +95,10 @@ def udp_listener_thread(host, port, expected_length):
                         pass
                 data_queue.put(data)
                 # Writes the data in a csv file for the moment
-                write_data(data)
+                asyncio.run(write_data(data))
+
+                # TODO: for the moment, we make a connexion to the light each time we wanna write data.
+                # A solution would be to connect once in tcp_server.py, and then to call write_data if we're connected
                 
     except Exception as e:
         print(f"Error UDP : {e}")
