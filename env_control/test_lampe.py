@@ -1,9 +1,34 @@
 import asyncio
+import os
+from pathlib import Path
+
 from tapo import ApiClient
 
 IP_SC = "192.168.12.90"
-EMAIL = "aubin.thome@atelier-lyon.com"
-PASSWORD = "pXC#0JE07OJyiqcIlek!u5$J4YXH!m"
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+load_env_file(Path(__file__).with_name(".env"))
+
+EMAIL = os.getenv("EMAIL")
+PASSWORD = os.getenv("PASSWORD")
+
+if not EMAIL or not PASSWORD:
+    raise RuntimeError("EMAIL et PASSWORD doivent être définis dans env_control/.env")
 
 
 async def afficher_statut(device):
