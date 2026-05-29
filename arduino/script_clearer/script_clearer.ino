@@ -28,7 +28,7 @@ const uint16_t PC_CONTROL_PORT_TCP = 20000;
 
 // Hardware Pins
 const uint8_t PIN_ADC_INPUT = A0;   // Reads the plant answer
-const uint8_t PIN_PWM_OUTPUT = 6;   // Sends the signal
+const uint8_t PIN_PWM_OUTPUT = 15;   // Sends the signal
 const uint8_t LED_Witness = 12;     // LED that turns on during measuring
 
 // === DATA STRUCTURES ===

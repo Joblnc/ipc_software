@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import asyncio
-from server.data_collection import write_data
+from data_collection import write_data
 
 def get_local_ip():
     # creates false socket to get our ip

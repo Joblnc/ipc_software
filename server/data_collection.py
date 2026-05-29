@@ -13,12 +13,12 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
-IP_SC = os.getenv("IP_SC")
+IP_LIGHT = os.getenv("IP_LIGHT")
 CLIENT_ID = os.getenv("TUYA_CLIENT_ID")
 SECRET = os.getenv("TUYA_SECRET")
 DEVICE_ID = os.getenv("TUYA_DEVICE_ID")
 
-if not EMAIL or not PASSWORD or not IP_SC or not CLIENT_ID or not SECRET or not DEVICE_ID:
+if not EMAIL or not PASSWORD or not IP_LIGHT or not CLIENT_ID or not SECRET or not DEVICE_ID:
     raise RuntimeError("Env variables must be define in the .env file at the root")
 
 # TO NOT REMOVE : Way to write the names of the columns if we loose them
@@ -34,7 +34,7 @@ async def get_light_status():
     try:
         # connects to the stopcontact
         client = ApiClient(EMAIL, PASSWORD)
-        device = await client.p110(IP_SC)
+        device = await client.p110(IP_LIGHT)
 
         # next line is for debug
         #print(f"{'\033[92m'}Connected to the lamp !{'\033[0m'}")
