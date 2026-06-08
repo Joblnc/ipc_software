@@ -31,22 +31,6 @@ if not EMAIL or not PASSWORD or not IP_LIGHT or not CLIENT_ID or not SECRET or n
 # for i in range(180, 231):
 #     cols.append("Frequency:" + str(i) + "kHz")
 
-# gets the light status by connecting to the connected stopcontact
-# since we have to wait for client.p110, this function has to be awaited too
-async def get_light_status():
-    try:
-        device = await _get_light_device()
-
-        # next line is for debug
-        #print(f"{'\033[92m'}Connected to the lamp !{'\033[0m'}")
-
-        # gets the information about the light state
-        info = await device.get_device_info_json()
-        return True if info.get("device_on", False) else False
-    
-    except Exception as e:
-        print(f"{'\033[91m'}error : {e}\n{'\033[0m'}")
-
 async def _get_light_device():
     if not EMAIL or not PASSWORD or not IP_LIGHT:
         raise RuntimeError("Env variables must be define in the .env file at the root")
@@ -54,10 +38,28 @@ async def _get_light_device():
     client = ApiClient(EMAIL, PASSWORD)
     return await client.p110(IP_LIGHT)
 
-async def toggle_light():
+async def get_light_status(device=None):
     try:
-        device = await _get_light_device()
-        current_state = await get_light_status()
+        if device is None:
+            device = await _get_light_device()
+
+        # next line is for debug
+        #print(f"{'\033[92m'}Connected to the lamp !{'\033[0m'}")
+
+        # gets the information about the light state
+        info = await device.get_device_info_json()
+        return True if info.get("device_on", False) else False
+
+    except Exception as e:
+        print(f"{'\033[91m'}error : {e}\n{'\033[0m'}")
+
+async def toggle_light(device=None, current_state=None):
+    try:
+        if device is None:
+            device = await _get_light_device()
+
+        if current_state is None:
+            current_state = await get_light_status(device)
 
         if current_state:
             await device.off()
@@ -69,13 +71,16 @@ async def toggle_light():
     except Exception as e:
         print(f"{'\033[91m'}error while toggling light : {e}\n{'\033[0m'}")
 
-async def toggle_light_every_15_minutes_if_needed():
+async def toggle_light_every_15_minutes_if_needed(device, current_state):
     global _last_light_toggle
 
     now = time.monotonic()
     if now - _last_light_toggle >= LIGHT_TOGGLE_INTERVAL_SECONDS:
-        await toggle_light()
+        await toggle_light(device, current_state)
         _last_light_toggle = now
+        return not current_state
+
+    return current_state
 
 async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
     BASE_URL = "https://openapi.tuyaeu.com"
@@ -155,8 +160,9 @@ async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
 
 async def write_data(sweep: list):
     (temp, humidity) = await get_humidity_and_temperature()
-    await toggle_light_every_15_minutes_if_needed()
-    light = await get_light_status()
+    light_device = await _get_light_device()
+    current_light_state = await get_light_status(light_device)
+    light = await toggle_light_every_15_minutes_if_needed(light_device, current_light_state)
 
     print("light:", light)
     print("temperature:", temp)
