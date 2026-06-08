@@ -82,6 +82,20 @@ async def toggle_light_every_15_minutes_if_needed(device, current_state):
 
     return current_state
 
+async def test_light_toggle_at_start():
+    global _last_light_toggle
+
+    device = await _get_light_device()
+    initial_state = await get_light_status(device)
+
+    print("Startup toggle test: switching the light once")
+    await toggle_light(device, initial_state)
+    await asyncio.sleep(2)
+    await toggle_light(device, not initial_state)
+    print("Startup toggle test finished: light restored")
+
+    _last_light_toggle = time.monotonic()
+
 async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
     BASE_URL = "https://openapi.tuyaeu.com"
     EMPTY_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
@@ -180,4 +194,10 @@ async def write_data(sweep: list):
 
 
 l = [0] * 79
-asyncio.run(write_data(l))
+
+async def main():
+    await test_light_toggle_at_start()
+    await write_data(l)
+
+
+asyncio.run(main())
