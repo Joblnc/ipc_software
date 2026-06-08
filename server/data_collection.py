@@ -9,6 +9,9 @@ import hashlib
 import time
 import requests
 
+LIGHT_TOGGLE_INTERVAL_SECONDS = 15 * 60
+_last_light_toggle = time.monotonic()
+
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 EMAIL = os.getenv("EMAIL")
@@ -32,9 +35,7 @@ if not EMAIL or not PASSWORD or not IP_LIGHT or not CLIENT_ID or not SECRET or n
 # since we have to wait for client.p110, this function has to be awaited too
 async def get_light_status():
     try:
-        # connects to the stopcontact
-        client = ApiClient(EMAIL, PASSWORD)
-        device = await client.p110(IP_LIGHT)
+        device = await _get_light_device()
 
         # next line is for debug
         #print(f"{'\033[92m'}Connected to the lamp !{'\033[0m'}")
@@ -45,6 +46,36 @@ async def get_light_status():
     
     except Exception as e:
         print(f"{'\033[91m'}error : {e}\n{'\033[0m'}")
+
+async def _get_light_device():
+    if not EMAIL or not PASSWORD or not IP_LIGHT:
+        raise RuntimeError("Env variables must be define in the .env file at the root")
+
+    client = ApiClient(EMAIL, PASSWORD)
+    return await client.p110(IP_LIGHT)
+
+async def toggle_light():
+    try:
+        device = await _get_light_device()
+        current_state = await get_light_status()
+
+        if current_state:
+            await device.off()
+            print("Light toggled: OFF")
+        else:
+            await device.on()
+            print("Light toggled: ON")
+
+    except Exception as e:
+        print(f"{'\033[91m'}error while toggling light : {e}\n{'\033[0m'}")
+
+async def toggle_light_every_15_minutes_if_needed():
+    global _last_light_toggle
+
+    now = time.monotonic()
+    if now - _last_light_toggle >= LIGHT_TOGGLE_INTERVAL_SECONDS:
+        await toggle_light()
+        _last_light_toggle = now
 
 async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
     BASE_URL = "https://openapi.tuyaeu.com"
@@ -124,6 +155,7 @@ async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
 
 async def write_data(sweep: list):
     (temp, humidity) = await get_humidity_and_temperature()
+    await toggle_light_every_15_minutes_if_needed()
     light = await get_light_status()
 
     print("light:", light)
