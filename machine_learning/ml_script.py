@@ -20,7 +20,7 @@ from sklearn.model_selection import train_test_split
 
 # ============== REAL DATA ====================
 
-df = pd.read_csv("/home/johanblanc/Desktop/Perso/IT_Projects/IPC/Software/ipc_software/server/plant_data.csv")
+df = pd.read_csv("./plant_data.csv")
 
 # gets input variables, and output variable (light)
 X_raw = df.drop("Light", axis = 1)
