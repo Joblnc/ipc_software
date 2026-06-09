@@ -4,6 +4,8 @@ import torch.optim as optim
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.model_selection import train_test_split
 
 # ============= Fictive DATA ====================
 # Imaginons que l'on a 100 exemples (batch=100)
@@ -53,6 +55,18 @@ X_tensor = torch.tensor(X_numpy, dtype=torch.float32)
 # use of .view(-1, 1) : trick to have y as [N, 1] instead of [N]
 y_tensor = torch.tensor(y_numpy, dtype=torch.float32).view(-1, 1)
 
+# splits in train and validation dataset
+X_train, X_val, y_train, y_val = train_test_split(
+    X_tensor.numpy(), y_tensor.numpy(), test_size=0.2, random_state=42
+)
+
+# converts again in tensors
+train_dataset = TensorDataset(torch.tensor(X_train), torch.tensor(y_train))
+val_dataset = TensorDataset(torch.tensor(X_val), torch.tensor(y_val))
+
+# train loader to make small batches
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
 # TODO : remove for final product
 print("--- Dimensions checks ---")
 print(f"X shape : {X_tensor.shape}") 
@@ -89,7 +103,7 @@ model = MyIPCLSTM()
 criterion = nn.BCELoss() 
 
 # Optimizer, to update weights at each itearation (Adam is the most standard)
-optimizer = optim.Adam(model.parameters(), lr=0.01)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # ================ TRAINING LOOP ========================
 epochs = 100 # numbers of times it looks at the whole data
@@ -97,24 +111,37 @@ epochs = 100 # numbers of times it looks at the whole data
 print("Training beginning...")
 for epoch in range(epochs):
     model.train() # Puts the model in training mode
+    train_loss = 0.0
+
+    for batch_X, batch_y in train_loader:
+
     
-    # Resets gradients to 0 (gradients are the calculs of the previous step)
-    optimizer.zero_grad()
+        # Resets gradients to 0 (gradients are the calculs of the previous step)
+        optimizer.zero_grad()
     
-    # makes a forward pass, so a guess
-    predictions = model(X_tensor)
+        # makes a forward pass, so a guess
+        predictions = model(batch_X)
     
-    # calculates the error between guess and actual value
-    loss = criterion(predictions, y_tensor)
+        # calculates the error between guess and actual value
+        loss = criterion(predictions, batch_y)
     
-    # calculates how to update the weights, with a backpropagation
-    loss.backward()
+        # calculates how to update the weights, with a backpropagation
+        loss.backward()
     
-    # updates the weigths
-    optimizer.step()
+        # updates the weigths
+        optimizer.step()
+
+        train_loss += loss.item() * batch_X.size(0)
+
+    train_loss /= len(train_loader.dataset)
+
+    model.eval()
+    with torch.no_grad():
+        val_preds = model(torch.tensor(X_val))
+        val_loss = criterion(val_preds, torch.tensor(y_val)).item()
     
     # every twenty epochs, displays the error 
     if (epoch + 1) % 20 == 0:
-        print(f"Epoch {epoch+1}/{epochs} - Loss: {loss.item():.4f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} - Train Loss: {train_loss:.4f} - Validation Loss: {val_loss:.4f}")
 
 print("Training finished !")

@@ -192,12 +192,7 @@ async def write_data(sweep: list):
     df = pd.DataFrame([curr_line])
     df.to_csv("plant_data.csv", mode="a", index=False, header=False)
 
-
-l = [0] * 79
-
 async def main():
     await test_light_toggle_at_start()
-    await write_data(l)
-
 
 asyncio.run(main())
