@@ -1,0 +1,4 @@
+3 cycles de 15 min allumé, 15 min éteint
+Pas exactement 15 min car script encore en expérimental
+Lignes à 0 à chaque lancement de script
+Jour été froid
