@@ -6,6 +6,7 @@
 
 ```bash
 tmux new -s data_collector # create new session if not already created
+source .venv/bin/activate
 python3 tcp_server.py
 Ctrl+B then d # Detach
 tmux attach -t data_collector # Attach
