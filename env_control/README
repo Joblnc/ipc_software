@@ -1,4 +1,0 @@
-1 : Checker les cartes de l appareil : nmcli d
-2 : Brancher la carte 
-3 : Checker celle qui s est add 
-4 : nmcli device wifi hotspot ifname <name> ssid "MyAccessPoint" password "12345678"

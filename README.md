@@ -1,7 +1,19 @@
-## ipc_software
+# ipc_software
 
-# How to launch the script to test on a new computer
+## Launch the tcp_serv detached
 
-- Go in the script arduino, change the WiFi SSID, WiFi password, and ip of your computer on the WiFi (Note : your computer and your Arduino have to be on the same WiFi)
-- Upload on the Arduino
-- Launch the script by typing "python3 tcp_server.py" in a terminal 
+- Go in the script arduino, change the WiFi SSID, WiFi password, and ip of the servers (Note : your servers and your Arduino have to be on the same WiFi)
+
+```bash
+tmux new -s data_collector # create new session if not already created
+python3 tcp_server.py
+Ctrl+B then d # Detach
+tmux attach -t data_collector # Attach
+```
+
+## Setup temporary wifi
+
+- Check wifi adapter : `nmcli d`
+- Plug the usb wifi adapter
+- Find the one that is newly plugged
+- Execute : `nmcli device wifi hotspot ifname <adapter_name> ssid "MyAccessPoint" password "12345678"`
