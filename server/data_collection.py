@@ -2,15 +2,13 @@ import pandas as pd
 import asyncio
 import os
 from pathlib import Path
+from typing import Sequence
 from dotenv import load_dotenv
 from tapo import ApiClient
 import hmac
 import hashlib
 import time
 import requests
-
-LIGHT_TOGGLE_INTERVAL_SECONDS = 15 * 60
-_last_light_toggle = time.monotonic()
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -71,16 +69,72 @@ async def toggle_light(device=None, current_state=None):
     except Exception as e:
         print(f"{'\033[91m'}error while toggling light : {e}\n{'\033[0m'}")
 
-async def toggle_light_every_15_minutes_if_needed(device, current_state):
-    global _last_light_toggle
+class LightCycleController:
+    """Drives the light through a fixed number of cycles.
 
-    now = time.monotonic()
-    if now - _last_light_toggle >= LIGHT_TOGGLE_INTERVAL_SECONDS:
-        await toggle_light(device, current_state)
-        _last_light_toggle = now
-        return not current_state
+    One cycle is `phase_seconds` with the light in its starting state followed
+    by `phase_seconds` in the opposite state (by default: ON then OFF).
+    The desired state is computed from the elapsed time, so the light is always
+    set to the right state even if some sweeps are missed.
+    """
 
-    return current_state
+    def __init__(self, num_cycles: int, phase_seconds: float, start_on: bool = True):
+        self.num_cycles = num_cycles
+        self.phase_seconds = phase_seconds
+        self.start_on = start_on
+        self.cycle_seconds = phase_seconds * 2
+        self.total_seconds = num_cycles * self.cycle_seconds
+        self.start_time: float | None = None
+        self.device = None
+        # last state we deliberately applied, to avoid hitting the light every sweep
+        self._last_desired: bool | None = None
+
+    def start(self):
+        self.start_time = time.monotonic()
+
+    def elapsed(self) -> float:
+        if self.start_time is None:
+            return 0.0
+        return time.monotonic() - self.start_time
+
+    def is_finished(self) -> bool:
+        return self.start_time is not None and self.elapsed() >= self.total_seconds
+
+    def desired_state(self) -> bool:
+        # which half of the current cycle are we in?
+        position = self.elapsed() % self.cycle_seconds
+        in_first_phase = position < self.phase_seconds
+        return self.start_on if in_first_phase else not self.start_on
+
+    async def ensure_device(self):
+        if self.device is None:
+            self.device = await _get_light_device()
+        return self.device
+
+    async def apply(self) -> bool:
+        """Set the light to the state expected for the current time. Returns that state."""
+        if self.start_time is None:
+            self.start()
+
+        device = await self.ensure_device()
+        desired = self.desired_state()
+
+        # only talk to the light when the target state changes
+        if desired != self._last_desired:
+            current = await get_light_status(device)
+            if current is not None and current != desired:
+                await toggle_light(device, current)
+            self._last_desired = desired
+
+        return desired
+
+    async def finish(self):
+        """Turn the light off at the end of the run."""
+        device = await self.ensure_device()
+        current = await get_light_status(device)
+        if current:
+            await toggle_light(device, current)
+            print("Light turned OFF: all cycles finished")
 
 async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
     BASE_URL = "https://openapi.tuyaeu.com"
@@ -158,11 +212,16 @@ async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
 # collects the data and writes it in plant_data.csv 
 # since we have to wait for get_light_status, this function has to be awaited too
 
-async def write_data(sweep: list):
+async def write_data(sweep: Sequence, controller: "LightCycleController | None" = None):
     (temp, humidity) = await get_humidity_and_temperature()
-    light_device = await _get_light_device()
-    current_light_state = await get_light_status(light_device)
-    light = await toggle_light_every_15_minutes_if_needed(light_device, current_light_state)
+
+    if controller is not None:
+        # the controller owns the light: it decides the state from the cycle schedule
+        light = await controller.apply()
+    else:
+        # no schedule: just record the current light state without touching it
+        light_device = await _get_light_device()
+        light = await get_light_status(light_device)
 
     print("light:", light)
     print("temperature:", temp)

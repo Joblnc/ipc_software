@@ -1,13 +1,43 @@
 import socket
 import struct
 import sys
+import argparse
 import threading
 import queue
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import asyncio
-from data_collection import write_data
+from data_collection import write_data, LightCycleController
+
+
+def get_collection_config():
+    # number of cycles and phase duration drive the automatic light schedule.
+    # CLI flags override the interactive prompts (handy in tmux / scripts).
+    parser = argparse.ArgumentParser(description="Automated plant data collection")
+    parser.add_argument("--cycles", type=int, help="number of ON/OFF cycles to run")
+    parser.add_argument("--minutes", type=float,
+                        help="minutes per phase (light ON for n min, then OFF for n min)")
+    parser.add_argument("--start-off", action="store_true",
+                        help="start each cycle with the light OFF instead of ON")
+    args = parser.parse_args()
+
+    cycles = args.cycles
+    if cycles is None:
+        cycles = int(input("Number of cycles [4]: ") or 4)
+
+    minutes = args.minutes
+    if minutes is None:
+        minutes = float(input("Minutes per phase (light ON / light OFF) [15]: ") or 15)
+
+    start_on = not args.start_off
+
+    total_minutes = cycles * 2 * minutes
+    print(f"\nRunning {cycles} cycle(s) of {minutes} min "
+          f"{'ON' if start_on else 'OFF'} + {minutes} min "
+          f"{'OFF' if start_on else 'ON'}  ->  total {total_minutes} min\n")
+
+    return LightCycleController(cycles, minutes * 60, start_on)
 
 def get_local_ip():
     # creates false socket to get our ip
@@ -70,23 +100,36 @@ def send_instructions(s : socket.socket):
 # Queue to transfer network data to graphical interface
 data_queue = queue.Queue(maxsize=5)
 
+# Signaled by the UDP thread once all the requested cycles are done,
+# so the main (matplotlib) thread can close the window and return.
+collection_done = threading.Event()
+
 # Function that runs backwards, to collect udp data without blocking display of data
-def udp_listener_thread(host, port, expected_length):
+def udp_listener_thread(host, port, expected_length, controller):
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.bind((host, port))
     print(f"UDP listening started on {host}:{port}...")
-    
+
+    # the cycle clock starts when we begin listening for data
+    controller.start()
+
     try:
-        while True:
+        while not collection_done.is_set():
+            # stop as soon as the configured number of cycles has elapsed
+            if controller.is_finished():
+                asyncio.run(controller.finish())
+                collection_done.set()
+                break
+
             # 2048 is the max number of bytes to read
             data_bytes, _ = udp_socket.recvfrom(2048)
             # data_bytes stores answers on 2 bytes, so actual nb of bytes is len // 2
             nb_answers = len(data_bytes) // 2
-            
+
             if nb_answers == expected_length:
                 # Unpacks data with the correct format
                 data = struct.unpack(f"<{nb_answers}H", data_bytes)
-                
+
                 # Only keeps most recent data for display
                 if data_queue.full():
                     try:
@@ -94,12 +137,9 @@ def udp_listener_thread(host, port, expected_length):
                     except queue.Empty:
                         pass
                 data_queue.put(data)
-                # Writes the data in a csv file for the moment
-                asyncio.run(write_data(data))
+                # Writes the data in a csv file and drives the light schedule
+                asyncio.run(write_data(data, controller))
 
-                # TODO: for the moment, we make a connexion to the light each time we wanna write data.
-                # A solution would be to connect once in tcp_server.py, and then to call write_data if we're connected
-                
     except Exception as e:
         print(f"Error UDP : {e}")
     finally:
@@ -107,11 +147,14 @@ def udp_listener_thread(host, port, expected_length):
 
 
 # Function to collect data from Arduino in UDP and to display it
-def receive_answers_animated(host: str, x_axis: list):
+def receive_answers_animated(host: str, x_axis: list, controller):
     UDP_PORT = 12345
-    
+
+    collection_done.clear()
+
     # Starts network listening in a separate thread
-    listener = threading.Thread(target=udp_listener_thread, args=(host, UDP_PORT, len(x_axis)), daemon=True)
+    listener = threading.Thread(target=udp_listener_thread,
+                                args=(host, UDP_PORT, len(x_axis), controller), daemon=True)
     listener.start()
 
     # Configuration of Matplotlib
@@ -136,6 +179,10 @@ def receive_answers_animated(host: str, x_axis: list):
 
     # Update function (called automatically with Matplotlib)
     def update_graph(frame):
+        # close the window from the main thread once all cycles are done
+        if collection_done.is_set():
+            plt.close(fig)
+            return line,
         try:
             # Gets previous data
             data = data_queue.get_nowait()
@@ -175,6 +222,9 @@ def receive_answers_animated(host: str, x_axis: list):
 
 
 def main():
+    # ask for / parse the cycle configuration before opening the server
+    controller = get_collection_config()
+
     host = get_local_ip()
     port = 20000
 
@@ -200,9 +250,14 @@ def main():
         try:
             # send the list of frequencies to arduino
             x_axis = send_instructions(arduino_socket)
-            # gets the corresponding answers
-            receive_answers_animated(host, x_axis)
-            
+            # gets the corresponding answers (blocks until the cycles finish or the window is closed)
+            receive_answers_animated(host, x_axis, controller)
+
+            if collection_done.is_set():
+                print("Data collection finished: all cycles completed.")
+                arduino_socket.close()
+                break
+
         except ConnectionResetError:
             print("Arduino disconnected")
         finally:
