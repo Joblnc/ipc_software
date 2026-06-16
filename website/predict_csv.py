@@ -120,14 +120,11 @@ def predict_csv(csv_path, model_dir=None, threshold=0.5):
 		predictions = []
 		for offset, p in enumerate(probs):
 			predictions.append({
-				# index of the last row of the window (the moment predicted)
 				"prediction": bool(p > threshold),
 				"probability_on": round(float(p), 4),
 			})
 
-		return {
-			"prediction": predictions[-1],
-		}
+		return predictions[-1]
 
 	except Exception as e:
 		return {"ok": False, "error": f"{type(e).__name__}: {e}"}
