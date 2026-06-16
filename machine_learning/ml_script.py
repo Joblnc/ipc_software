@@ -9,6 +9,10 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
+from pathlib import Path
+
+CURRENT_FOLDER = Path(__file__).parent
+
 
 # ============= Fictive DATA ====================
 # Imaginons que l'on a 100 exemples (batch=100)
@@ -22,8 +26,10 @@ from sklearn.model_selection import train_test_split
 # y = torch.randint(0, 2, (100, 1)).float()
 
 
-model_path = "ipc_model.pth"
-scaler_path = "ipc_scaler.gz"
+model_path = CURRENT_FOLDER / "ipc_model.pth"
+scaler_path = CURRENT_FOLDER / "ipc_scaler.gz"
+training_set_path = CURRENT_FOLDER / "training_set.csv"
+val_set_path = CURRENT_FOLDER / "validation_set.csv"
 
 
 # ========== LSTM MODEL DEFINITION ===================
@@ -52,8 +58,8 @@ class MyIPCLSTM(nn.Module):
 
 def train_model(model, scaler):
 	# ============== REAL DATA ====================
-	train_df = pd.read_csv("./training_set.csv").ffill().bfill()
-	val_df = pd.read_csv("./validation_set.csv").ffill().bfill()
+	train_df = pd.read_csv(training_set_path).ffill().bfill()
+	val_df = pd.read_csv(val_set_path).ffill().bfill()
 	seq_len = 10
 	
 	
