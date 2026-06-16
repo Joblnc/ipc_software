@@ -212,27 +212,33 @@ async def get_humidity_and_temperature() -> tuple[int | None, int | None]:
 # collects the data and writes it in plant_data.csv 
 # since we have to wait for get_light_status, this function has to be awaited too
 
-async def write_data(sweep: Sequence, controller: "LightCycleController | None" = None):
-    (temp, humidity) = await get_humidity_and_temperature()
-
-    if controller is not None:
-        # the controller owns the light: it decides the state from the cycle schedule
-        light = await controller.apply()
-    else:
-        # no schedule: just record the current light state without touching it
-        light_device = await _get_light_device()
-        light = await get_light_status(light_device)
-
-    print("light:", light)
-    print("temperature:", temp)
-    print("humidity:", humidity)
-
-    # fills the current line with all the collected data
-    curr_line = [temp, humidity, light]
+async def write_data(sweep: Sequence, controller: "LightCycleController | None" = None, real_data = False):
+    curr_line = []
+    file_path = "test_data.csv"
     for i in sweep:
         curr_line.append(i)
+
+    if (not real_data):
+        (temp, humidity) = await get_humidity_and_temperature()
+
+        if controller is not None:
+            # the controller owns the light: it decides the state from the cycle schedule
+            light = await controller.apply()
+        else:
+            # no schedule: just record the current light state without touching it
+            light_device = await _get_light_device()
+            light = await get_light_status(light_device)
+
+        print("light:", light)
+        print("temperature:", temp)
+        print("humidity:", humidity)
+
+        # fills the current line with all the collected data
+        curr_line = [temp, humidity, light]
+        file_path = "plant_data.csv"
+    
     
     # fills the csv by making a dataframe with the collected data, and 
     # appends it to the file
     df = pd.DataFrame([curr_line])
-    df.to_csv("plant_data.csv", mode="a", index=False, header=False)
+    df.to_csv(file_path, mode="a", index=False, header=False)

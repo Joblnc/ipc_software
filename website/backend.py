@@ -7,7 +7,6 @@ if root_path not in sys.path:
 
 from flask import Flask, jsonify, request, send_from_directory
 from server.data_collection import toggle_light
-from machine_learning.ml_test import get_light_for_one_line
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 
@@ -26,7 +25,7 @@ def make_estimation(payload):
 
     #false df, replace with result of the ssh request
     df = pd.read_csv("server/datas/data_09_06_2026.csv")
-    return get_light_for_one_line(df)
+    #return get_light_for_one_line(df)
 
 
 def get_device_status():

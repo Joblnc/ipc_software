@@ -1,59 +1,146 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Internet of plants</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet of Plants</title>
+    <!-- Importation de Tailwind CSS pour un design moderne sans fichier CSS séparé -->
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <main class="app-shell">
-    <section class="hero-card">
-      <p class="eyebrow">Internet of plants</p>
-      <h1>Gere ta plante depuis une interface claire et rapide.</h1>
-      <p class="lead">
-        Allume ou eteins la lumiere, lance une estimation, puis branche simplement le backend quand tu seras pret.
-      </p>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center font-sans">
 
-      <div class="status-grid">
-        <article class="status-tile">
-          <span class="tile-label">Etat de la lumiere</span>
-          <strong id="lightStateText">Eteinte</strong>
-        </article>
-        <article class="status-tile">
-          <span class="tile-label">Derniere estimation</span>
-          <strong id="estimateStateText">Aucune</strong>
-        </article>
-      </div>
+    <!-- Conteneur principal (Card) -->
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-slate-700">
+        
+        <!-- Le Titre -->
+        <div class="flex justify-center items-center gap-3 mb-6">
+            <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+            </svg>
+            <h1 class="text-3xl font-bold text-emerald-400">Internet of Plants</h1>
+        </div>
 
-      <div class="actions">
-        <button id="lightButton" class="primary-button" type="button" aria-pressed="false">
-          Allumer la lumiere
-        </button>
-        <button id="estimateButton" class="secondary-button" type="button">
-          Faire une estimation
-        </button>
-      </div>
+        <!-- État de la lumière -->
+        <div class="mb-8 p-4 bg-slate-900 rounded-xl border border-slate-700">
+            <p class="text-slate-400 text-sm uppercase tracking-wider mb-1">État de la lumière</p>
+            <p id="light-status" class="text-2xl font-semibold text-white">Inconnu ⚪</p>
+        </div>
 
-      <div class="result-panel">
-        <p class="panel-title">Retour applicatif</p>
-        <p id="resultText">Le frontend est pret. Branche le backend pour piloter le materiel et calculer les estimations.</p>
-      </div>
+        <!-- Les deux boutons -->
+        <div class="flex flex-col gap-4 mb-8">
+            <button id="btn-toggle" onclick="toggleLight()" class="w-full py-3 px-6 bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-xl font-bold text-lg shadow-lg flex justify-center items-center gap-2">
+                Allumer / Éteindre
+            </button>
+            
+            <button id="btn-predict" onclick="runPrediction()" class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-500 transition-colors rounded-xl font-bold text-lg shadow-lg flex justify-center items-center gap-2">
+                Lancer la prédiction IA
+            </button>
+        </div>
 
-      <section class="backend-section">
-        <h2>Fonctions backend a remplir</h2>
-        <ul>
-          <li><code>set_light_state(is_on)</code> pour envoyer l ordre a la lampe.</li>
-          <li><code>make_estimation(payload)</code> pour calculer ton estimation.</li>
-          <li><code>get_device_status()</code> pour remonter l etat du systeme.</li>
-        </ul>
-      </section>
-    </section>
-  </main>
+        <!-- Le nouvel encadré pour le résultat du modèle -->
+        <div class="p-5 bg-slate-900 rounded-xl border border-indigo-500/30 text-left">
+            <h2 class="text-indigo-400 font-semibold mb-2 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                Résultat du modèle
+            </h2>
+            <div id="prediction-result" class="text-slate-300 text-sm space-y-2">
+                <p>En attente d'une analyse...</p>
+            </div>
+        </div>
 
-  <script src="app.js"></script>
+    </div>
+
+    <!-- Script logique intégré -->
+    <script>
+        // Variable pour suivre l'état de la lumière localement
+        let isLightOn = false;
+
+        // Fonction pour le bouton 1 : Gérer la lumière
+        async function toggleLight() {
+            const statusElement = document.getElementById('light-status');
+            const btn = document.getElementById('btn-toggle');
+            
+            // Inversion de l'état
+            isLightOn = !isLightOn;
+            
+            // UI Loading
+            statusElement.innerText = "Chargement... ⏳";
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            try {
+                const response = await fetch('/api/light', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_on: isLightOn })
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    statusElement.innerText = isLightOn ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
+                    statusElement.className = isLightOn ? "text-2xl font-semibold text-emerald-400" : "text-2xl font-semibold text-slate-500";
+                } else {
+                    statusElement.innerText = "Erreur ❌";
+                    isLightOn = !isLightOn; // On annule l'inversion en cas d'erreur
+                    alert("Erreur: " + data.message);
+                }
+            } catch (error) {
+                console.error("Erreur de connexion:", error);
+                statusElement.innerText = "Hors Ligne 🔌";
+                isLightOn = !isLightOn; // On annule
+            } finally {
+                // UI Restore
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }
+        }
+
+        // Fonction pour le bouton 2 : Demander l'estimation IA
+        async function runPrediction() {
+            const resultBox = document.getElementById('prediction-result');
+            const btn = document.getElementById('btn-predict');
+            
+            // UI Loading
+            resultBox.innerHTML = '<p class="animate-pulse text-indigo-300">Analyse des fréquences en cours... ⏳</p>';
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            try {
+                const response = await fetch('/api/estimate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok && data.message && data.message.length > 0) {
+                    const prediction = data.message[0].prediction === 1 ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
+                    const actual = data.message[0].actual === 1 ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
+                    
+                    resultBox.innerHTML = `
+                        <div class="flex justify-between items-center bg-slate-800 p-2 rounded">
+                            <span>Prédiction de l'IA:</span>
+                            <span class="font-bold ${data.message[0].prediction === 1 ? 'text-emerald-400' : 'text-slate-400'}">${prediction}</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-800 p-2 rounded mt-1">
+                            <span>État Réel (Capteurs):</span>
+                            <span class="font-bold">${actual}</span>
+                        </div>
+                    `;
+                } else {
+                    resultBox.innerHTML = '<p class="text-red-400">Erreur lors de l\'estimation.</p>';
+                }
+            } catch (error) {
+                console.error("Erreur de connexion:", error);
+                resultBox.innerHTML = '<p class="text-red-400">Impossible de joindre le serveur IA.</p>';
+            } finally {
+                // UI Restore
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }
+        }
+    </script>
 </body>
 </html>
