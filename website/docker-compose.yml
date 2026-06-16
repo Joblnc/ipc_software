@@ -1,0 +1,17 @@
+# Run the backend with: docker compose -f website/docker-compose.yml up -d
+services:
+  backend:
+    build:
+      # context is the repo root so the image can include server/ and website/
+      context: ..
+      dockerfile: website/Dockerfile
+    image: iop-backend:latest
+    container_name: iop-backend
+    # secrets / device config come from the root .env (NOT baked into the image)
+    env_file:
+      - ../.env
+    # host networking so the container can bind the host LAN IP and receive the
+    # Arduino's TCP/UDP connection (port 20000 / 12345). With bridge networking
+    # the Arduino could not reach the collector. The web UI is on host:5000.
+    network_mode: host
+    restart: unless-stopped

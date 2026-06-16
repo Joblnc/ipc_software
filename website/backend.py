@@ -1,14 +1,22 @@
 import sys
 import os
-import pandas as pd
 root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_path not in sys.path:
     sys.path.append(root_path)
 
 from flask import Flask, jsonify, request, send_from_directory
-from server.data_collection import toggle_light
+from server.data_collection import toggle_light, get_light_status
+
+from predict_csv import predict_csv
+from frequency_collector import collect_frequency_lines
 
 app = Flask(__name__, static_folder=".", static_url_path="")
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+# bundled sample used when no live collection is requested / possible
+SAMPLE_CSV = os.path.join(HERE, "input.csv")
+# where freshly collected sweeps are written before being fed to the model
+LIVE_CSV = os.path.join(HERE, "live_input.csv")
 
 
 async def set_light_state(is_on):
@@ -20,12 +28,30 @@ async def set_light_state(is_on):
 
 
 def make_estimation(payload):
-    """Connect this to the estimation logic or model inference."""
-    # make a ssh request to get some data. Idea : shell script 
+    """Collect frequency sweeps live from the Arduino and predict the light state.
 
-    #false df, replace with result of the ssh request
-    df = pd.read_csv("server/datas/data_09_06_2026.csv")
-    #return get_light_for_one_line(df)
+    Data source:
+      - by default        : collect fresh sweeps from the Arduino (live)
+      - payload["csv"]     : an explicit CSV path (skips collection, for testing)
+      - payload["sample"]  : True -> use the bundled input.csv (offline demo)
+
+    Returns the predictor's dict: {"prediction": bool, "probability_on": float}
+    or {"ok": False, "error": ...} on failure.
+    """
+    if payload.get("csv"):
+        return predict_csv(payload["csv"])
+    if payload.get("sample"):
+        return predict_csv(SAMPLE_CSV)
+
+    # collect at least seq_len sweeps (the model's window) live from the Arduino,
+    # save them, then run the model on them
+    num_lines = max(int(payload.get("num_lines", 10)), 10)
+    df = collect_frequency_lines(
+        num_lines=num_lines,
+        timeout=float(payload.get("timeout", 30.0)),
+    )
+    df.to_csv(LIVE_CSV, index=False)
+    return predict_csv(LIVE_CSV)
 
 
 def get_device_status():
@@ -65,16 +91,28 @@ async def light():
 
 
 @app.post("/api/estimate")
-def estimate():
+async def estimate():
     payload = request.get_json(silent=True) or {}
 
     try:
         result = make_estimation(payload)
-        light_results = [{'actual': int(result[0]), 'prediction' : int(result[1])}]
-        print(light_results)
-        return jsonify({"ok": True, "message": light_results})
-    except NotImplementedError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 501
+    except Exception as exc:  # collection / IO failures
+        return jsonify({"ok": False, "message": str(exc)}), 500
+
+    # the predictor signals failure with an "error" key instead of a prediction
+    if "error" in result:
+        return jsonify({"ok": False, "message": result["error"]}), 500
+
+    # the real light state from the lamp (None if it can't be reached)
+    actual = await get_light_status()
+
+    light_results = [{
+        "prediction": int(bool(result["prediction"])),
+        "actual": int(bool(actual)) if actual is not None else None,
+        "probability_on": result.get("probability_on"),
+    }]
+    print(light_results)
+    return jsonify({"ok": True, "message": light_results})
 
 
 if __name__ == "__main__":

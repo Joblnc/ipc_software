@@ -1,4 +1,16 @@
-__pycache__/
+# keep the build context small and avoid copying local virtualenvs / caches
+**/__pycache__/
 *.pyc
-.venv/
+**/.venv/
+**/venv/
+**/node_modules/
 .git/
+.gitignore
+
+# runtime artifact regenerated on each live collection
+website/live_input.csv
+
+# not needed in the backend image
+arduino/
+machine_learning/
+*.tar.gz
