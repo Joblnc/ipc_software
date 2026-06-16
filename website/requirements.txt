@@ -1,7 +1,5 @@
-Flask>=3.0,<4.0
-pandas
 torch
 scikit-learn
-tapo
-python-dotenv
-requests
+pandas
+numpy
+joblib
