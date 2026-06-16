@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Internet of Plants</title>
-    <!-- Importation de Tailwind CSS pour un design moderne sans fichier CSS séparé -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center font-sans">
 
-    <!-- Conteneur principal (Card) -->
     <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center border border-slate-700">
         
-        <!-- Le Titre -->
         <div class="flex justify-center items-center gap-3 mb-6">
             <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
@@ -20,13 +17,11 @@
             <h1 class="text-3xl font-bold text-emerald-400">Internet of Plants</h1>
         </div>
 
-        <!-- État de la lumière -->
         <div class="mb-8 p-4 bg-slate-900 rounded-xl border border-slate-700">
             <p class="text-slate-400 text-sm uppercase tracking-wider mb-1">État de la lumière</p>
-            <p id="light-status" class="text-2xl font-semibold text-white">Inconnu ⚪</p>
+            <p id="light-status" class="text-2xl font-semibold text-slate-300 animate-pulse">Vérification... 🔍</p>
         </div>
 
-        <!-- Les deux boutons -->
         <div class="flex flex-col gap-4 mb-8">
             <button id="btn-toggle" onclick="toggleLight()" class="w-full py-3 px-6 bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-xl font-bold text-lg shadow-lg flex justify-center items-center gap-2">
                 Allumer / Éteindre
@@ -37,7 +32,6 @@
             </button>
         </div>
 
-        <!-- Le nouvel encadré pour le résultat du modèle -->
         <div class="p-5 bg-slate-900 rounded-xl border border-indigo-500/30 text-left">
             <h2 class="text-indigo-400 font-semibold mb-2 flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
@@ -50,21 +44,38 @@
 
     </div>
 
-    <!-- Script logique intégré -->
     <script>
-        // Variable pour suivre l'état de la lumière localement
         let isLightOn = false;
 
-        // Fonction pour le bouton 1 : Gérer la lumière
+        document.addEventListener('DOMContentLoaded', fetchInitialStatus);
+
+        async function fetchInitialStatus() {
+            const statusElement = document.getElementById('light-status');
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.ok) {
+                    isLightOn = data.is_on;
+                    statusElement.innerText = isLightOn ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
+                    statusElement.className = isLightOn ? "text-2xl font-semibold text-emerald-400" : "text-2xl font-semibold text-slate-500";
+                } else {
+                    statusElement.innerText = "Erreur état ❌";
+                    statusElement.className = "text-2xl font-semibold text-red-400";
+                }
+            } catch (error) {
+                statusElement.innerText = "Hors Ligne 🔌";
+                statusElement.className = "text-2xl font-semibold text-red-500";
+            }
+        }
+
         async function toggleLight() {
             const statusElement = document.getElementById('light-status');
             const btn = document.getElementById('btn-toggle');
             
-            // Inversion de l'état
             isLightOn = !isLightOn;
-            
-            // UI Loading
             statusElement.innerText = "Chargement... ⏳";
+            statusElement.className = "text-2xl font-semibold text-slate-300 animate-pulse";
             btn.disabled = true;
             btn.classList.add('opacity-50');
 
@@ -78,30 +89,28 @@
                 const data = await response.json();
                 
                 if (data.ok) {
+                    if(data.is_on !== undefined) isLightOn = data.is_on;
                     statusElement.innerText = isLightOn ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
                     statusElement.className = isLightOn ? "text-2xl font-semibold text-emerald-400" : "text-2xl font-semibold text-slate-500";
                 } else {
                     statusElement.innerText = "Erreur ❌";
-                    isLightOn = !isLightOn; // On annule l'inversion en cas d'erreur
-                    alert("Erreur: " + data.message);
+                    statusElement.className = "text-2xl font-semibold text-red-400";
+                    isLightOn = !isLightOn; 
                 }
             } catch (error) {
-                console.error("Erreur de connexion:", error);
                 statusElement.innerText = "Hors Ligne 🔌";
-                isLightOn = !isLightOn; // On annule
+                statusElement.className = "text-2xl font-semibold text-red-500";
+                isLightOn = !isLightOn; 
             } finally {
-                // UI Restore
                 btn.disabled = false;
                 btn.classList.remove('opacity-50');
             }
         }
 
-        // Fonction pour le bouton 2 : Demander l'estimation IA
         async function runPrediction() {
             const resultBox = document.getElementById('prediction-result');
             const btn = document.getElementById('btn-predict');
             
-            // UI Loading
             resultBox.innerHTML = '<p class="animate-pulse text-indigo-300">Analyse des fréquences en cours... ⏳</p>';
             btn.disabled = true;
             btn.classList.add('opacity-50');
@@ -133,10 +142,8 @@
                     resultBox.innerHTML = '<p class="text-red-400">Erreur lors de l\'estimation.</p>';
                 }
             } catch (error) {
-                console.error("Erreur de connexion:", error);
                 resultBox.innerHTML = '<p class="text-red-400">Impossible de joindre le serveur IA.</p>';
             } finally {
-                // UI Restore
                 btn.disabled = false;
                 btn.classList.remove('opacity-50');
             }

@@ -70,11 +70,18 @@ def health():
 
 
 @app.get("/api/status")
-def status():
+async def status():
     try:
-        return jsonify(get_device_status())
-    except NotImplementedError as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 501
+        # On va chercher l'état réel de l'ampoule Tapo
+        actual_state = await get_light_status()
+        
+        # Si on ne trouve pas l'ampoule, get_light_status() peut renvoyer None
+        if actual_state is None:
+             return jsonify({"ok": False, "message": "Ampoule introuvable"}), 503
+             
+        return jsonify({"ok": True, "is_on": bool(actual_state)})
+    except Exception as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 500
 
 
 @app.post("/api/light")
