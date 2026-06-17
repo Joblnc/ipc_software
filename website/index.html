@@ -130,15 +130,15 @@
                     const proba = data.message[0].probability_on
                     resultBox.innerHTML = `
                         <div class="flex justify-between items-center bg-slate-800 p-2 rounded">
-                            <span>Prédiction de l'IA:</span>
+                            <span>Prédiction du modèle:</span>
                             <span class="font-bold ${data.message[0].prediction === 1 ? 'text-emerald-400' : 'text-slate-400'}">${prediction}</span>
                         </div>
                         <div class="flex justify-between items-center bg-slate-800 p-2 rounded mt-1">
-                            <span>État Réel (Capteurs):</span>
+                            <span>État Réel:</span>
                             <span class="font-bold">${actual}</span>
                         </div>
                         <div class="flex justify-between items-center bg-slate-800 p-2 rounded mt-1">
-                            <span>proba light on (confiance):</span>
+                            <span>Probabilité lumière ON:</span>
                             <span class="font-bold">${proba}</span>
                         </div>
                     `;
