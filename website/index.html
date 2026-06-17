@@ -127,7 +127,7 @@
                 if (data.ok && data.message && data.message.length > 0) {
                     const prediction = data.message[0].prediction === 1 ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
                     const actual = data.message[0].actual === 1 ? "ALLUMÉE 🌿" : "ÉTEINTE 🌙";
-                    
+                    const proba = data.message[0].probability_on
                     resultBox.innerHTML = `
                         <div class="flex justify-between items-center bg-slate-800 p-2 rounded">
                             <span>Prédiction de l'IA:</span>
@@ -136,6 +136,10 @@
                         <div class="flex justify-between items-center bg-slate-800 p-2 rounded mt-1">
                             <span>État Réel (Capteurs):</span>
                             <span class="font-bold">${actual}</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-800 p-2 rounded mt-1">
+                            <span>proba light on (confiance):</span>
+                            <span class="font-bold">${proba}</span>
                         </div>
                     `;
                 } else {
