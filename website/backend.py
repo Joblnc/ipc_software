@@ -20,7 +20,7 @@ LIVE_CSV = os.path.join(HERE, "live_input.csv")
 
 
 async def set_light_state(is_on):
-    """Connect this to the relay, MQTT topic, or device command."""
+    """toggles the light whatever happens. Improvement possible : use is_on, to activate or deactivate the light depending on it"""
     await toggle_light()
     return "set_light_state finished"
     
@@ -54,11 +54,6 @@ def make_estimation(payload):
     return predict_csv(LIVE_CSV)
 
 
-def get_device_status():
-    """Return the current hardware and application status."""
-    raise NotImplementedError("Implement get_device_status() in your backend.")
-
-
 @app.get("/")
 def index():
     return send_from_directory(".", "index.html")
@@ -72,12 +67,12 @@ def health():
 @app.get("/api/status")
 async def status():
     try:
-        # On va chercher l'état réel de l'ampoule Tapo
+        # get state of the tapo light
         actual_state = await get_light_status()
         
-        # Si on ne trouve pas l'ampoule, get_light_status() peut renvoyer None
+        # if not found
         if actual_state is None:
-             return jsonify({"ok": False, "message": "Ampoule introuvable"}), 503
+             return jsonify({"ok": False, "message": "cannot find light"}), 503
              
         return jsonify({"ok": True, "is_on": bool(actual_state)})
     except Exception as exc:
