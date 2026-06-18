@@ -86,7 +86,6 @@ async def light():
 
     try:
         result = await set_light_state(is_on)
-        print(result)
         return jsonify({"ok": True, "is_on": is_on, "result": result})
     except NotImplementedError as exc:
         return jsonify({"ok": False, "is_on": is_on, "message": str(exc)}), 501
@@ -113,7 +112,6 @@ async def estimate():
         "actual": int(bool(actual)) if actual is not None else None,
         "probability_on": result.get("probability_on"),
     }]
-    print(light_results)
     return jsonify({"ok": True, "message": light_results})
 
 
